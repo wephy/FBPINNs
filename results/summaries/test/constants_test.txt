@@ -1,0 +1,29 @@
+run: test
+domain: <class 'fbpinns.domains.RectangularDomainND'>
+domain_init_kwargs: {'xmin': array([0., 0.]), 'xmax': array([3., 3.])}
+problem: <class 'fbpinns.problems.Laplace2D'>
+problem_init_kwargs: {'n': 5}
+decomposition: <class 'fbpinns.decompositions.RectangularDecompositionND'>
+decomposition_init_kwargs: {'subdomain_xs': [array([0.        , 0.33333333, 0.66666667, 1.        , 1.33333333,
+       1.66666667, 2.        , 2.33333333, 2.66666667, 3.        ]), array([0.        , 0.33333333, 0.66666667, 1.        , 1.33333333,
+       1.66666667, 2.        , 2.33333333, 2.66666667, 3.        ])], 'subdomain_ws': [array([1.13333333, 1.13333333, 1.13333333, 1.13333333, 1.13333333,
+       1.13333333, 1.13333333, 1.13333333, 1.13333333, 1.13333333]), array([1.13333333, 1.13333333, 1.13333333, 1.13333333, 1.13333333,
+       1.13333333, 1.13333333, 1.13333333, 1.13333333, 1.13333333])], 'unnorm': (0.0, 3.0)}
+network: <class 'fbpinns.networks.FCN'>
+network_init_kwargs: {'layer_sizes': (2, 12, 12, 1)}
+n_steps: 100000
+scheduler: <class 'fbpinns.schedulers.AllActiveSchedulerND'>
+scheduler_kwargs: {}
+ns: ((100, 100),)
+n_test: (100, 100)
+sampler: grid
+optimiser: <function adam at 0x7fe0b3ba54e0>
+optimiser_kwargs: {'learning_rate': 0.001}
+seed: 0
+summary_freq: 1000
+test_freq: 1000
+model_save_freq: 10000
+show_figures: True
+save_figures: False
+clear_output: True
+hostname: wephy-pc

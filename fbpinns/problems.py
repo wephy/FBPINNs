@@ -62,9 +62,6 @@ class Problem:
         raise NotImplementedError
 
 
-
-
-
 class HarmonicOscillator1D(Problem):
     """Solves the time-dependent damped harmonic oscillator
           d^2 u      du
@@ -271,8 +268,6 @@ class HarmonicOscillator1DInverse(HarmonicOscillator1D):
         return phys + data
 
 
-
-
 class BurgersEquation2D(Problem):
     """Solves the time-dependent 1D viscous Burgers equation
         du       du        d^2 u
@@ -314,7 +309,7 @@ class BurgersEquation2D(Problem):
     @staticmethod
     def constraining_fn(all_params, x_batch, u):
         sd = all_params["static"]["problem"]["sd"]
-        x, t, tanh, sin, pi = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh, jnp.sin, jnp.pi
+        x, t, tanh, sin, pi, exp = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh, jnp.sin, jnp.pi, jnp.exp
         u = tanh((x+1)/sd)*tanh((1-x)/sd)*tanh((t-0)/sd)*u - sin(pi*x)
         return u
 
@@ -341,6 +336,140 @@ class BurgersEquation2D(Problem):
         return u
 
 
+class Laplace2D(Problem):
+    """
+        d^2 u   d^2 u   
+        ----- + ----- = -f
+        dx^2    dy^2    
+
+        Boundary conditions:
+        u(x,0) = 0
+        u(x,3) = 0
+        u(0,y) = 0
+        u(3,y) = 0
+    """
+
+    @staticmethod
+    def init_params(sd=0.1, n=3):
+
+        static_params = {
+            "dims":(1,2),
+            "sd":sd,
+            "n":n,
+            }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,(0,0)),
+            (0,(1,1)),
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sd = all_params["static"]["problem"]["sd"]
+        
+        x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
+        u = tanh((x)/sd)*tanh((3-x)/sd)*tanh((y)/sd)*tanh((3-y)/sd)*u
+        
+        return u
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        n = all_params["static"]["problem"]["n"]
+        x_batch, u_xx, u_yy = constraints[0]
+        x, y, pi, sin = x_batch[:,0], x_batch[:,1], jnp.pi, jnp.sin
+        
+        f = jnp.zeros(x_batch.shape[0])
+        for w in (2**i * pi for i in range(n)):
+            f += w**2 * sin(w * x) * sin(w * y)
+        f *= 2 / n
+        
+        phys = f.reshape((-1, 1)) + u_xx + u_yy
+
+        return jnp.mean(phys**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        n = all_params["static"]["problem"]["n"]
+        x, y, pi, sin = x_batch[:,0], x_batch[:,1], jnp.pi, jnp.sin
+        
+        s = jnp.zeros(x_batch.shape[0])
+        for w in (2**i * pi for i in range(n)):
+            s += sin(w * x) * sin(w * y)
+
+        return (1 / n * s).reshape((-1,1))
+
+
+class Laplace2D_2(Problem):
+    """
+        d^2 u   d^2 u   
+        ----- + ----- = -f
+        dx^2    dy^2    
+
+        Boundary conditions:
+        u(x,0) = sinh(x)
+        u(x,pi) = -sinh(x)
+        u(0,y) = 0
+        u(pi,y) = sinh(pi)cos(y)
+    """
+
+    @staticmethod
+    def init_params(sd=0.1):
+
+        static_params = {
+            "dims":(1,2),
+            "sd":sd,
+            }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,(0,0)),
+            (0,(1,1)),
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sd = all_params["static"]["problem"]["sd"]
+        
+        x, y, tanh, sinh, cos, pi = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh, jnp.sinh, jnp.cos, jnp.pi
+        tanh_yl = tanh(y/sd)
+        tanh_yr = tanh((pi-y)/sd)
+        tanh_xl = tanh(x/sd)
+        tanh_xr = tanh((pi-x)/sd)
+        #   ---u doesnt contribute at the boundary--- + -------bottom---------- + --------top------------- + ----------right------------------
+        u = tanh_yl * tanh_yr * tanh_xl * tanh_xr * u + sinh(x) * (1 - tanh_yl) + -sinh(x) * (1 - tanh_yr) + sinh(pi) * cos(y) * (1 - tanh_xr)
+
+        return u
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        x_batch, u_xx, u_yy = constraints[0]
+
+        phys = u_xx + u_yy
+
+        return jnp.mean(phys**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        x, y, pi, sinh, cos = x_batch[:,0], x_batch[:,1], jnp.pi, jnp.sinh, jnp.cos
+        
+        s = sinh(x) * cos(y)
+
+        return s.reshape((-1,1))
 
 
 class WaveEquationConstantVelocity3D(Problem):
