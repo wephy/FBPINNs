@@ -593,6 +593,7 @@ class FBPINNTrainer(_Trainer):
             ps_ = cl.init_params(**kwargs)
             if ps_[0]: all_params["static"][tag] = ps_[0]
             if ps_[1]: all_params["trainable"][tag] = ps_[1]
+        # print(all_params["static"]["domain"]["xd"], all_params["static"]["problem"]["dims"][1], all_params["static"]["decomposition"]["xd"])
         assert (all_params["static"]["domain"]["xd"] ==\
                 all_params["static"]["problem"]["dims"][1] ==\
                 all_params["static"]["decomposition"]["xd"])

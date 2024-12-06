@@ -15,27 +15,31 @@ def _plot_test_im(u_test, xlim, ulim, n_test, it=None, bounds=True):
     u_test = u_test.reshape(n_test)
     if it is not None:
         u_test = u_test[:,:,it]# for 3D
-    if bounds:
-        plt.imshow(u_test.T,# transpose as jnp.meshgrid uses indexing="ij"
-                origin="lower", extent=(xlim[0][0], xlim[1][0], xlim[0][1], xlim[1][1]),
-                cmap="viridis", vmin=ulim[0], vmax=ulim[1])
-    else:
-        plt.imshow(u_test.T,# transpose as jnp.meshgrid uses indexing="ij"
-                origin="lower", extent=(xlim[0][0], xlim[1][0], xlim[0][1], xlim[1][1]),
-                cmap="viridis")
+    # if bounds:
+    #     plt.imshow(u_test.T,# transpose as jnp.meshgrid uses indexing="ij"
+    #             origin="lower", extent=(xlim[0][0], xlim[1][0], xlim[0][1], xlim[1][1]),
+    #             cmap="viridis", vmin=ulim[0], vmax=ulim[1])
+    # else:
+    plt.pcolormesh(u_test.T),# transpose as jnp.meshgrid uses indexing="ij"
+                # origin="lower", extent=(xlim[0][0], xlim[1][0], xlim[0][1], xlim[1][1]),
+                # cmap="viridis")
     plt.colorbar()
-    plt.xlim(xlim[0][0], xlim[1][0])
-    plt.ylim(xlim[0][1], xlim[1][1])
-    plt.gca().set_aspect("equal")
+    # plt.xlim(xlim[0][0], xlim[1][0])
+    # plt.ylim(xlim[0][1], xlim[1][1])
+    # plt.gca().set_aspect("equal")
 
 @_to_numpy
 def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test):
 
+    u_test = u_test[:,0:1]
+
+    print(u_test.shape)
+
     xlim, ulim = _plot_setup(x_batch_test, u_exact)
     xlim0 = x_batch_test.min(0), x_batch_test.max(0)
 
-    fig = plt.figure(figsize=(10,10))
-    gs = GridSpec(2, 3, figure=fig, height_ratios=[2, 1], hspace=0.3, wspace=0.3)
+    fig = plt.figure(figsize=(14,14))
+    gs = GridSpec(2, 3, figure=fig, height_ratios=[1, 2], hspace=0.3, wspace=0.3)
 
     # # plot domain + x_batch
     ax1 = fig.add_subplot(gs[0, 0:3])
@@ -44,21 +48,29 @@ def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test,
     decomposition.plot(all_params, active=active, create_fig=False)
     ax1.set_xlim(xlim[0][0]-1, xlim[1][0]+1)
     ax1.set_ylim(xlim[0][1]-1, xlim[1][1]+1)
-    ax1.set_aspect("equal")
+    
+    ax2 = fig.add_subplot(gs[1, 0:3])
+    ax2.set_title(f"Epoch [{i}] Full solution")
+    
+    xs, ts = x_batch_test[:, 0], x_batch_test[:, 1]
+    X, T = np.meshgrid(xs, ts)
+    ax2.pcolormesh(X, T, u_test.reshape(-1))
+    
+    
+    # ax1.set_aspect("equal")
 
     # plot full solutions
-    diff = (u_exact - u_test)
-    ax2 = fig.add_subplot(gs[1, 0])
-    ax2.set_title(f"[{i}] Difference")
-    _plot_test_im(diff, xlim0, [-0.01, 0.01], n_test, bounds=False)
+    # diff = (u_exact - u_test)
+    # ax2 = fig.add_subplot(gs[1, 0])
+    # ax2.set_title(f"[{i}] Difference")
+    # _plot_test_im(diff, xlim0, [-0.01, 0.01], n_test, bounds=False)
 
-    ax3 = fig.add_subplot(gs[1, 1])
-    ax3.set_title(f"[{i}] Full solution")
-    _plot_test_im(u_test, xlim0, ulim, n_test)
 
-    ax4 = fig.add_subplot(gs[1, 2])
-    ax4.set_title(f"[{i}] Ground truth")
-    _plot_test_im(u_exact, xlim0, ulim, n_test)
+    # _plot_test_im(u_test, xlim0, ulim, n_test, bounds=False)
+
+    # ax4 = fig.add_subplot(gs[1, 2])
+    # ax4.set_title(f"[{i}] Ground truth")
+    # _plot_test_im(u_exact, xlim0, ulim, n_test, bounds=False)
 
     # plot raw hist
     # ax5 = fig.add_subplot(gs[0, 2])

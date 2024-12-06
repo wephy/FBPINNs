@@ -472,6 +472,107 @@ class Laplace2D_2(Problem):
         return s.reshape((-1,1))
 
 
+class Ice(Problem):
+    """
+        d^2 u   d^2 u   
+        ----- + ----- = -f
+        dx^2    dy^2    
+
+        Boundary conditions:
+        u(x,0) = sinh(x)
+        u(x,pi) = -sinh(x)
+        u(0,y) = 0
+        u(pi,y) = sinh(pi)cos(y)
+    """
+
+    @staticmethod
+    def init_params(sdx=0.01, sdt=1, c_ice=2050, c_water=4184, rho_ice=910, rho_water=1000, k_ice=2.2, k_water=0.6, L_water=334):
+
+        static_params = {
+            "dims":(2,2),
+            "sdx":sdx,
+            "sdt":sdt,
+            "c_ice":c_ice,
+            "c_water":c_water,
+            "rho_ice":rho_ice,
+            "rho_water":rho_water,
+            "k_ice":k_ice,
+            "k_water":k_water,
+            "L_water":L_water,
+            }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,(0,)),
+            (0,(0,0)),
+            (0,(1,)),
+            (1,()),
+            (1,(0,)),
+            (1,(1,)),
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sdx = all_params["static"]["problem"]["sdx"]
+        sdt = all_params["static"]["problem"]["sdt"]
+        
+        x, t, T, h, tanh = x_batch[:,0:1], x_batch[:,1:2], u[:,0:1], u[:,1:2], jax.nn.tanh
+        tanh_x0 = tanh(x/sdx)
+        tanh_xR = tanh((0.1 - x)/sdx)
+        tanh_t0 = tanh(t/sdt)
+
+        T = tanh_x0 * tanh_xR * tanh_t0 * T + 10 * (1 - (tanh_xR * tanh_t0)) + -10 * (1 - tanh_x0)
+        
+        h = tanh_t0 * h
+        
+        return jnp.concatenate((T, h), axis=1)
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        c_ice = all_params["static"]["problem"]["c_ice"]
+        c_water = all_params["static"]["problem"]["c_water"]
+        rho_ice = all_params["static"]["problem"]["rho_ice"]
+        rho_water = all_params["static"]["problem"]["rho_water"]
+        k_ice = all_params["static"]["problem"]["k_ice"]
+        k_water = all_params["static"]["problem"]["k_water"]
+        L_water = all_params["static"]["problem"]["L_water"]
+        
+        x_batch, T_x, T_xx, T_t, h, h_x, h_t = constraints[0]
+        x, t = x_batch[:,0], x_batch[:,1]
+        
+        #x_ice_mask = jnp.where(x<=h)
+        #x_water_mask = jnp.where(x>h)
+        #loss_ice_heateqn = rho_ice * c_ice * T_t[x_ice_mask] - k_ice * T_xx[x_ice_mask]
+        #loss_water_heateqn = rho_water * c_water * T_t[x_water_mask] - k_water * T_xx[x_water_mask]
+        #loss_heateqn = jnp.hstack((loss_ice_heateqn, loss_water_heateqn))
+        
+        loss_heateqn = rho_water * c_water * T_t - k_water * T_xx
+        
+        condition = (x > h - 1e-2) & (x < h + 1e-2)
+        # indices = jnp.where(condition)[0]
+        # near_h_mask = jnp.zeros_like(x, dtype=int).at[indices].set(1)
+        # count = jnp.sum(near_h_mask)
+        
+        loss_stefan = rho_water * L_water * h_t * (~condition) + k_water * T_x * (~condition)
+
+        return jnp.mean(loss_heateqn**2) + jnp.mean(loss_stefan**2) + jnp.mean(h_x**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        x, t = x_batch[:,0], x_batch[:,1]
+        
+        s = 0.001 * x
+
+        return s.reshape((-1,1))
+
+
 class WaveEquationConstantVelocity3D(Problem):
     """Solves the time-dependent (2+1)D wave equation with constant velocity
         d^2 u   d^2 u    1  d^2 u
