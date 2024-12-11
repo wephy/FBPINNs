@@ -407,6 +407,149 @@ class Laplace2D(Problem):
         return (1 / n * s).reshape((-1,1))
 
 
+class Gravity(Problem):
+    """
+        d^2 u   d^2 u   
+        ----- + ----- = rho(x)
+        dx^2    dy^2    
+
+        Boundary conditions:
+        u(x,0) = 0
+        u(x,1) = 0
+        u(0,y) = 0
+        u(1,y) = 0
+    """
+
+    @staticmethod
+    def init_params(sd=0.1):
+
+        static_params = {
+            "dims":(1,2),
+            "sd":sd,
+            "sources": [
+                [np.array([0.3, 0.7]), 0.02, 5],
+                [np.array([0.7, 0.7]), 0.02, 1],
+                [np.array([0.3, 0.3]), 0.02, 1],
+                [np.array([0.7, 0.3]), 0.02, 1]
+            ]
+        }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,(0,0)),
+            (0,(1,1)),
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sd = all_params["static"]["problem"]["sd"]
+        
+        x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
+        u = tanh((x)/sd)*tanh((1-x)/sd)*tanh((y)/sd)*tanh((1-y)/sd)*u
+        
+        return u
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        sources = all_params["static"]["problem"]["sources"]
+        x_batch, u_xx, u_yy = constraints[0]
+        x, y, = x_batch[:,0], x_batch[:,1]
+
+        norm = jnp.linalg.norm
+        
+        f = jnp.zeros(x_batch.shape[0])
+        
+        for source in sources:
+            f += (norm(x_batch - source[0], axis=1) < source[1]) * source[2]
+
+        phys = f.reshape((-1, 1)) + u_xx + u_yy
+
+        return jnp.mean(phys**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        s = x_batch[:, 0]
+        return s
+
+class GravityDonut(Problem):
+    """
+        d^2 u   d^2 u   
+        ----- + ----- = rho(x)
+        dx^2    dy^2    
+
+        Boundary conditions:
+        u(x,0) = 0
+        u(x,1) = 0
+        u(0,y) = 0
+        u(1,y) = 0
+    """
+
+    @staticmethod
+    def init_params(sd=0.1):
+
+        static_params = {
+            "dims":(1,2),
+            "sd":sd,
+            "sources": [
+                [np.array([0.3, 0.7]), 0.1, 5],
+                [np.array([-0.7, 0.3]), 0.1, 1],
+                [np.array([-0.3, -0.7]), 0.1, 1],
+                [np.array([0.7, -0.3]), 0.1, 1]
+            ]
+        }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,(0,0)),
+            (0,(1,1)),
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sd = all_params["static"]["problem"]["sd"]
+        
+        x, y, tanh, sqrt, square = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh, jnp.sqrt, jnp.square
+        r = sqrt(square(x) + square(y))
+        u = tanh((r - 0.5) / sd) * tanh((1- r) / sd) * u
+        cond_l = r > 0.5
+        cond_r = r < 1.0
+        u = u * (cond_l) * (cond_r)
+        return u
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        sources = all_params["static"]["problem"]["sources"]
+        x_batch, u_xx, u_yy = constraints[0]
+        x, y, = x_batch[:,0], x_batch[:,1]
+
+        norm = jnp.linalg.norm
+        
+        f = jnp.zeros(x_batch.shape[0])
+        
+        for source in sources:
+            f += (norm(x_batch - source[0], axis=1) < source[1]) * source[2]
+
+        phys = f.reshape((-1, 1)) + u_xx + u_yy
+
+        return jnp.mean(phys**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        s = x_batch[:, 0]
+        return s
+
 class Laplace2D_2(Problem):
     """
         d^2 u   d^2 u   
@@ -486,7 +629,8 @@ class Ice(Problem):
     """
 
     @staticmethod
-    def init_params(sdx=0.01, sdt=1, c_ice=2050, c_water=4184, rho_ice=910, rho_water=1000, k_ice=2.2, k_water=0.6, L_water=334):
+    def init_params(sdx=0.01, sdt=1, c_ice=2050, c_water=4184, rho_ice=910, rho_water=1000,
+                    k_ice=2.2, k_water=0.6, L_water=334, freeze_temp=0, zero_at_h_weight=1., h_x_weight=1.):
 
         static_params = {
             "dims":(2,2),
@@ -499,6 +643,9 @@ class Ice(Problem):
             "k_ice":k_ice,
             "k_water":k_water,
             "L_water":L_water,
+            "freeze_temp":freeze_temp,
+            "zero_at_h_weight":zero_at_h_weight,
+            "h_x_weight":h_x_weight,
             }
 
         return static_params, {}
@@ -509,6 +656,7 @@ class Ice(Problem):
         # physics loss
         x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
         required_ujs_phys = (
+            (0,()),
             (0,(0,)),
             (0,(0,0)),
             (0,(1,)),
@@ -525,7 +673,7 @@ class Ice(Problem):
         
         x, t, T, h, tanh = x_batch[:,0:1], x_batch[:,1:2], u[:,0:1], u[:,1:2], jax.nn.tanh
         tanh_x0 = tanh(x/sdx)
-        tanh_xR = tanh((0.1 - x)/sdx)
+        tanh_xR = tanh((0.02 - x)/sdx)
         tanh_t0 = tanh(t/sdt)
 
         T = tanh_x0 * tanh_xR * tanh_t0 * T + 10 * (1 - (tanh_xR * tanh_t0)) + -10 * (1 - tanh_x0)
@@ -543,26 +691,34 @@ class Ice(Problem):
         k_ice = all_params["static"]["problem"]["k_ice"]
         k_water = all_params["static"]["problem"]["k_water"]
         L_water = all_params["static"]["problem"]["L_water"]
+        freeze_temp = all_params["static"]["problem"]["freeze_temp"]
+        zero_at_h_weight = all_params["static"]["problem"]["zero_at_h_weight"]
+        h_x_weight = all_params["static"]["problem"]["h_x_weight"]
         
-        x_batch, T_x, T_xx, T_t, h, h_x, h_t = constraints[0]
+        # factor = rho_water * L_water / k_water
+        
+        x_batch, T, T_x, T_xx, T_t, h, h_x, h_t = constraints[0]
         x, t = x_batch[:,0], x_batch[:,1]
         
-        #x_ice_mask = jnp.where(x<=h)
-        #x_water_mask = jnp.where(x>h)
-        #loss_ice_heateqn = rho_ice * c_ice * T_t[x_ice_mask] - k_ice * T_xx[x_ice_mask]
-        #loss_water_heateqn = rho_water * c_water * T_t[x_water_mask] - k_water * T_xx[x_water_mask]
-        #loss_heateqn = jnp.hstack((loss_ice_heateqn, loss_water_heateqn))
+        cond_at_h = (x > h - 1e-2) & (x < h + 1e-2)
+        cond_ice = (x < h)
+        cond_water = (x >= h)
         
-        loss_heateqn = rho_water * c_water * T_t - k_water * T_xx
+        loss_heateqn_ice = (rho_ice * c_ice * T_t * (~cond_ice) - k_ice * T_xx * (~cond_ice)) / 10_000.
         
-        condition = (x > h - 1e-2) & (x < h + 1e-2)
-        # indices = jnp.where(condition)[0]
-        # near_h_mask = jnp.zeros_like(x, dtype=int).at[indices].set(1)
-        # count = jnp.sum(near_h_mask)
+        loss_heateqn_water = (rho_water * c_water * T_t * (~cond_water) - k_ice * T_xx * (~cond_water)) / 10_000.
         
-        loss_stefan = rho_water * L_water * h_t * (~condition) + k_water * T_x * (~condition)
+        loss_stefan = (rho_water * L_water * h_t * (~cond_at_h) + k_water * T_x * (~cond_at_h)) / 100_000.
 
-        return jnp.mean(loss_heateqn**2) + jnp.mean(loss_stefan**2) + jnp.mean(h_x**2)
+        loss_T_at_h_is_zero = T * (~cond_at_h) - freeze_temp
+
+        loss_h_not_in_domain = jnp.clip(-h, 0, None)
+        
+        loss_h_not_in_domain2 = jnp.clip(0.01 * h, 0, None)
+
+        return (jnp.mean(loss_heateqn_ice**2) + jnp.mean(loss_heateqn_water**2) + jnp.mean(loss_stefan**2)
+                + h_x_weight * jnp.mean(h_x**2) + zero_at_h_weight * jnp.mean(loss_T_at_h_is_zero**2) + h_x_weight * jnp.mean(loss_h_not_in_domain**2)  + h_x_weight * jnp.mean(loss_h_not_in_domain2**2)
+        )
 
     @staticmethod
     def exact_solution(all_params, x_batch, batch_shape):
@@ -571,6 +727,101 @@ class Ice(Problem):
         s = 0.001 * x
 
         return s.reshape((-1,1))
+
+
+class CahnHilliard(Problem):
+    """
+
+    """
+
+    @staticmethod
+    def init_params(sdt=0.1, gamma=0.005**2):
+        static_params = {
+            "dims":(1,3),
+            "sdt":sdt,
+            "gamma":gamma,
+            }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,()),  # u
+            (0,(2,)),  # u_t
+            (0,(0,)),  # u_x
+            (0,(0,0)),  # u_xx
+            (0,(0,0,0)),  # u_xxx
+            (0,(0,0,0,0)),  # u_xxxx
+            (0,(1,)),  # u_y
+            (0,(1,1)),  # u_yy
+            (0,(1,1,1)),  # u_yy
+            (0,(1,1,1,1)),  # u_yyyy
+            (0,(0,0,1)),  # u_xxy
+            (0,(0,1,1)),  # u_xyy
+            (0,(0,0,1,1)),  # u_xxyy
+        )
+        
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sdt = all_params["static"]["problem"]["sdt"]
+        x, y, t, tanh, sin, cos = x_batch[:,0:1], x_batch[:,1:2], x_batch[:,2:3], jax.nn.tanh, jnp.sin, jnp.cos
+        
+        tanh_t0 = tanh(t/sdt)
+        
+        return tanh_t0 * u + (1 - tanh_t0) * sin(x / 10) * sin(y / 10)**3
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        gamma = all_params["static"]["problem"]["gamma"]
+        
+        x_batch, u, u_t, u_x, u_xx, u_xxx, u_xxxx, u_y, u_yy, u_yyy, u_yyyy, u_xxy, u_xyy, u_xxyy = constraints[0]
+        
+        x, y, t = x_batch[:,0:1], x_batch[:,1:2], x_batch[:,2:3]
+        
+        cond_x0 = x == 0
+        cond_x1 = x == 100
+        cond_y0 = y == 0
+        cond_y1 = y == 100
+        
+        u2 = u * u
+        
+        cahnhilliard_loss = u_t + gamma * (u_xxxx + 2 * u_xxyy + u_yyyy) - 6 * u * (u_x**2 + u_y**2) - 3 * u2 * (u_xx + u_yy)
+
+        mu_x = gamma * (u_xxx + u_xyy) + u_x * (1 - 3 * u2)
+        mu_y = gamma * (u_xxy + u_yyy) + u_x * (1 - 3 * u2)
+        
+        u_x0 = u_x * (~cond_x0)
+        u_x1 = u_x * (~cond_x1)
+        u_y0 = u_y * (~cond_y0)
+        u_y1 = u_y * (~cond_y1)
+        
+        mu_x0 = mu_x * (~cond_x0)
+        mu_x1 = mu_x * (~cond_x1)
+        mu_y0 = mu_y * (~cond_y0)
+        mu_y1 = mu_y * (~cond_y1)
+        
+        return (
+            100 * jnp.mean(cahnhilliard_loss**2) +
+            jnp.mean(mu_x0**2) +
+            jnp.mean(mu_x1**2) +
+            jnp.mean(mu_y0**2) +
+            jnp.mean(mu_y1**2) +
+            jnp.mean(u_x0**2) +
+            jnp.mean(u_x1**2) +
+            jnp.mean(u_y0**2) +
+            jnp.mean(u_y1**2)
+        )
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        x, t = x_batch[:,0], x_batch[:,1]
+
+        return x.reshape((-1,1))
+
 
 
 class WaveEquationConstantVelocity3D(Problem):

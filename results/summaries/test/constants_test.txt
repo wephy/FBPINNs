@@ -1,20 +1,24 @@
 run: test
 domain: <class 'fbpinns.domains.RectangularDomainND'>
-domain_init_kwargs: {'xmin': array([0., 0.]), 'xmax': array([1.e-02, 6.e+01])}
-problem: <class 'fbpinns.problems.Ice'>
-problem_init_kwargs: {'sdx': 0.0005, 'sdt': 3}
+domain_init_kwargs: {'xmin': array([-1., -1.]), 'xmax': array([1., 1.])}
+problem: <class 'fbpinns.problems.GravityDonut'>
+problem_init_kwargs: {'sd': 0.1}
 decomposition: <class 'fbpinns.decompositions.MultilevelRectangularDecompositionND'>
-decomposition_init_kwargs: {'subdomain_xss': [[array([0.005]), array([30.])]], 'subdomain_wss': [[array([0.01]), array([60.])]], 'unnorm': (0.0, 3.0)}
+decomposition_init_kwargs: {'subdomain_xss': [[array([0.]), array([0.])], [array([-1.        , -0.77777778, -0.55555556, -0.33333333, -0.11111111,
+        0.11111111,  0.33333333,  0.55555556,  0.77777778,  1.        ]), array([-1.        , -0.77777778, -0.55555556, -0.33333333, -0.11111111,
+        0.11111111,  0.33333333,  0.55555556,  0.77777778,  1.        ])]], 'subdomain_wss': [[array([2.]), array([2.])], [array([0.86666667, 0.86666667, 0.86666667, 0.86666667, 0.86666667,
+       0.86666667, 0.86666667, 0.86666667, 0.86666667, 0.86666667]), array([0.86666667, 0.86666667, 0.86666667, 0.86666667, 0.86666667,
+       0.86666667, 0.86666667, 0.86666667, 0.86666667, 0.86666667])]], 'unnorm': (0.0, 3.0)}
 network: <class 'fbpinns.networks.FCN'>
-network_init_kwargs: {'layer_sizes': (2, 64, 12, 2)}
-n_steps: 100000
+network_init_kwargs: {'layer_sizes': (2, 32, 1)}
+n_steps: 50000
 scheduler: <class 'fbpinns.schedulers.AllActiveSchedulerND'>
 scheduler_kwargs: {}
 ns: ((100, 100),)
 n_test: (100, 100)
 sampler: grid
-optimiser: <function adam at 0x7feae9d418a0>
-optimiser_kwargs: {'learning_rate': 0.001}
+optimiser: <function adam at 0x7f7c11806480>
+optimiser_kwargs: {'learning_rate': 0.0005}
 seed: 0
 summary_freq: 1000
 test_freq: 1000

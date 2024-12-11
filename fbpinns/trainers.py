@@ -22,6 +22,16 @@ from fbpinns import networks, plot_trainer
 from fbpinns.util.logger import logger
 from fbpinns.util.jax_util import tree_index, total_size, str_tensor, partition, combine
 
+import triangle as tr
+import matplotlib.tri as mtri
+
+
+def circle(N, R):
+    i = np.arange(N)
+    theta = i * 2 * np.pi / N
+    pts = np.stack([np.cos(theta), np.sin(theta)], axis=1) * R
+    seg = np.stack([i, i + 1], axis=1) % N
+    return pts, seg
 
 # LABELLING CONVENTIONS
 
@@ -593,7 +603,6 @@ class FBPINNTrainer(_Trainer):
             ps_ = cl.init_params(**kwargs)
             if ps_[0]: all_params["static"][tag] = ps_[0]
             if ps_[1]: all_params["trainable"][tag] = ps_[1]
-        # print(all_params["static"]["domain"]["xd"], all_params["static"]["problem"]["dims"][1], all_params["static"]["decomposition"]["xd"])
         assert (all_params["static"]["domain"]["xd"] ==\
                 all_params["static"]["problem"]["dims"][1] ==\
                 all_params["static"]["decomposition"]["xd"])
@@ -617,6 +626,16 @@ class FBPINNTrainer(_Trainer):
         (optimiser, all_opt_states, optimiser_fn, loss_fn, key,
         constraints_global, x_batch_global, constraint_offsets_global, constraint_fs_global, jmapss,
         x_batch_test, u_exact) = _common_train_initialisation(c, key, all_params, problem, domain)
+
+        pts0, seg0 = circle(60, 1.0)
+        pts1, seg1 = circle(30, 0.5)
+        pts = np.vstack([pts0, pts1])
+        seg = np.vstack([seg0, seg1 + seg0.shape[0]])
+        A = dict(vertices=pts, segments=seg, holes=[[0, 0]])
+        T = tr.triangulate(A, "Fa0.0005") #note that the origin uses 'qpa0.05' here
+        tri = mtri.Triangulation(T["vertices"][:,0], T["vertices"][:, 1], triangles=T["triangles"])
+        xbatch_test_triangles = jnp.vstack([T["vertices"][:,0], T["vertices"][:, 1]]).T
+        x_batch_test = xbatch_test_triangles.copy()
 
         # fix test data inputs
         logger.info("Getting test data inputs..")
@@ -729,6 +748,15 @@ class FBPINNTrainer(_Trainer):
     def _test(self, x_batch_test, u_exact, u_test_losses, x_batch, test_inputs, i, pstep, fstep, start0, active, all_params, model_fns, problem, decomposition):
         "Test step"
 
+        pts0, seg0 = circle(60, 1.0)
+        pts1, seg1 = circle(30, 0.5)
+        pts = np.vstack([pts0, pts1])
+        seg = np.vstack([seg0, seg1 + seg0.shape[0]])
+        A = dict(vertices=pts, segments=seg, holes=[[0, 0]])
+        T = tr.triangulate(A, "Fa0.0005") #note that the origin uses 'qpa0.05' here
+        tri = mtri.Triangulation(T["vertices"][:,0], T["vertices"][:, 1], triangles=T["triangles"])
+        xbatch_test_triangles = jnp.vstack([T["vertices"][:,0], T["vertices"][:, 1]]).T
+
         c, writer = self.c, self.writer
         n_test = c.n_test
 
@@ -769,7 +797,7 @@ class FBPINNTrainer(_Trainer):
         # create figures
         if i % (c.test_freq * 5) == 0:
             fs = plot_trainer.plot("FBPINN", all_params["static"]["problem"]["dims"],
-                x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test)
+                x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, tri)
             if fs is not None:
                 self._save_figs(i, fs)
 
@@ -969,7 +997,6 @@ if __name__ == "__main__":
     print(all_params["static"]["problem"])
     if "problem" in all_params["trainable"]:
         print(all_params["trainable"]["problem"])
-
 
 
 

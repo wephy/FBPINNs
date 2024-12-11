@@ -5,11 +5,34 @@ This module is used by plot_trainer.py (and subsequently trainers.py)
 """
 
 import numpy as np
-
+import time
 import matplotlib.pyplot as plt
+from cmap import Colormap
+
 from matplotlib.gridspec import GridSpec
 
 from fbpinns.plot_trainer_1D import _plot_setup, _to_numpy
+
+import matplotlib.tri as mtri
+import triangle as tr
+import time
+
+# def circle(N, R):
+#     i = np.arange(N)
+#     theta = i * 2 * np.pi / N
+#     pts = np.stack([np.cos(theta), np.sin(theta)], axis=1) * R
+#     seg = np.stack([i, i + 1], axis=1) % N
+#     return pts, seg
+
+# pts0, seg0 = circle(60, 1.0)
+# pts1, seg1 = circle(30, 0.5)
+# pts = np.vstack([pts0, pts1])
+# seg = np.vstack([seg0, seg1 + seg0.shape[0]])
+# A = dict(vertices=pts, segments=seg, holes=[[0, 0]])
+# T = tr.triangulate(A, "Fa0.0005") #note that the origin uses 'qpa0.05' here
+# tri = mtri.Triangulation(T["vertices"][:,0], T["vertices"][:, 1], triangles=T["triangles"])
+# xbatch_test_triangles = np.vstack([T["vertices"][:,0], T["vertices"][:, 1]]).T
+
 
 def _plot_test_im(u_test, xlim, ulim, n_test, it=None, bounds=True):
     u_test = u_test.reshape(n_test)
@@ -31,61 +54,82 @@ def _plot_test_im(u_test, xlim, ulim, n_test, it=None, bounds=True):
 @_to_numpy
 def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test):
 
-    u_test = u_test[:,0:1]
+    # SQUARE
+    # A = dict(vertices=np.array(((-1, -1), (1, -1), (1, 1), (-1, 1))))
+    # T = tr.triangulate(A, f"DFqa{0.0005}")  # D flag ensures that all triangles are Delaunay
+    # tri = mtri.Triangulation(T["vertices"][:,0], T["vertices"][:, 1], triangles=T["triangles"])
 
-    print(u_test.shape)
+    # time.sleep(5)
 
     xlim, ulim = _plot_setup(x_batch_test, u_exact)
     xlim0 = x_batch_test.min(0), x_batch_test.max(0)
 
-    fig = plt.figure(figsize=(14,14))
-    gs = GridSpec(2, 3, figure=fig, height_ratios=[1, 2], hspace=0.3, wspace=0.3)
+    f = plt.figure(figsize=(14,6))
 
-    # # plot domain + x_batch
-    ax1 = fig.add_subplot(gs[0, 0:3])
-    ax1.set_title(f"[{i}] Domain decomposition")
-    ax1.scatter(x_batch[:,0], x_batch[:,1], alpha=0.5, color="k", s=1)
+    # if i == 10_000:
+    plt.subplot(1,2,1)
+    plt.title(f"[{i}] Domain decomposition")
+    plt.scatter(x_batch[:,0], x_batch[:,1], alpha=0.5, color="k", s=1)
     decomposition.plot(all_params, active=active, create_fig=False)
-    ax1.set_xlim(xlim[0][0]-1, xlim[1][0]+1)
-    ax1.set_ylim(xlim[0][1]-1, xlim[1][1]+1)
+    plt.xlim(xlim[0][0], xlim[1][0])
+    plt.ylim(xlim[0][1], xlim[1][1])
+    plt.gca().set_aspect("equal")
     
-    ax2 = fig.add_subplot(gs[1, 0:3])
-    ax2.set_title(f"Epoch [{i}] Full solution")
+    print(n_test, u_test.shape, u_test)
     
-    xs, ts = x_batch_test[:, 0], x_batch_test[:, 1]
-    X, T = np.meshgrid(xs, ts)
-    ax2.pcolormesh(X, T, u_test.reshape(-1))
-    
-    
-    # ax1.set_aspect("equal")
+    plt.subplot(1,2,2)
+    plt.title(f"[{i}] Full solution")
+    p = plt.tripcolor(n_test, u_test.reshape((-1)), cmap="viridis")
+    plt.colorbar(p)
+    plt.gca().set_aspect("equal")
 
-    # plot full solutions
-    # diff = (u_exact - u_test)
-    # ax2 = fig.add_subplot(gs[1, 0])
-    # ax2.set_title(f"[{i}] Difference")
-    # _plot_test_im(diff, xlim0, [-0.01, 0.01], n_test, bounds=False)
+    # # plot full solutions
+    # plt.subplot(3,2,2)
+    # plt.title(f"[{i}] Difference")
+    # _plot_test_im(u_exact - u_test, xlim0, ulim, n_test)
 
 
-    # _plot_test_im(u_test, xlim0, ulim, n_test, bounds=False)
-
-    # ax4 = fig.add_subplot(gs[1, 2])
-    # ax4.set_title(f"[{i}] Ground truth")
-    # _plot_test_im(u_exact, xlim0, ulim, n_test, bounds=False)
-
-    # plot raw hist
-    # ax5 = fig.add_subplot(gs[0, 2])
-    # ax5.set_title(f"[{i}] Difference hist")
-    # diff = diff.flatten()
-    # emin = diff.min()
-    # emax = diff.max()
-    # _, bins = np.histogram(diff, bins=100)
-    # logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
-    # ax5.hist(diff.flatten(), bins=logbins)#, label=f"{emin:.1f}, {emax:.1f}")
-    # # plt.xscale('log')
     
+    
+    # _plot_test_im(u_test, xlim0, ulim, n_test)
+
+    # plt.subplot(3,2,4)
+    # plt.title(f"[{i}] Ground truth")
+    # _plot_test_im(u_test, xlim0, ulim, n_test)
+
+    # # plot raw hist
+    # plt.subplot(3,2,5)
+    # plt.title(f"[{i}] Raw solutions")
+    # plt.hist(us_raw_test.flatten(), bins=100, label=f"{us_raw_test.min():.1f}, {us_raw_test.max():.1f}")
+    # plt.legend(loc=1)
+    # plt.xlim(-5,5)
+
     plt.tight_layout()
 
-    return (("test", fig),)
+    return (("test",f),)
+
+# @_to_numpy
+# def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test):
+
+#     u = u_test[:,0:1]
+
+#     fig, ax = plt.subplots(1, 1, figsize=(9, 6))
+
+#     ax.set_title(f"Epoch [{i}] Full solution.")
+    
+#     N = 100
+    
+#     U = u.reshape((N, N))
+    
+#     X, Y = x_batch_test[:, 0].reshape((N, N)), x_batch_test[:, 1].reshape((N, N))
+    
+#     p = ax.pcolormesh(X, Y, U)
+#     plt.colorbar(p)
+
+#     plt.tight_layout()
+#     fig.savefig("tmp_plot")
+
+#     return (("test", fig),)
 
 @_to_numpy
 def plot_2D_PINN(x_batch_test, u_exact, u_test, u_raw_test, x_batch, all_params, i, n_test):
