@@ -67,7 +67,7 @@ def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test,
     ax.set_aspect("equal")
 
     u_test = u_test.reshape(-1)
-    np.save("heart" + f"_testNN[4, 8;2.6]e{i}_2", u_test)
+    np.save("heart" + f"_NNlonger[4;16,16]e{i}_1", u_test)
 
     im = ax.tripcolor(mtri, u_test,
                       cmap=Colormap("crameri:batlow").to_mpl(), clim=(np.min(u_test), np.max(u_test)))
@@ -75,7 +75,7 @@ def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test,
 
     cbar = fig.colorbar(im, orientation='vertical')
     plt.show()
-    fig.savefig("heart" + f"_testNN[4, 8, 16;2.6]e{i}_2.png")
+    fig.savefig("heart" + f"_NNlonger[4;16,16]e{i}_1.png")
     # time.sleep(5)
 
     # xlim, ulim = _plot_setup(x_batch_test, u_exact)

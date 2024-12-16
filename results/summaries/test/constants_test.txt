@@ -34,20 +34,16 @@ problem_init_kwargs: {'ansatz': Array([[0.365625],
        [  0.       ],
        [  0.       ]], dtype=float32)}
 decomposition: <class 'fbpinns.decompositions.MultilevelRectangularDecompositionND'>
-decomposition_init_kwargs: {'subdomain_xss': [[array([-1.        , -0.33333333,  0.33333333,  1.        ]), array([-1.        , -0.33333333,  0.33333333,  1.        ])], [array([-1.        , -0.71428571, -0.42857143, -0.14285714,  0.14285714,
-        0.42857143,  0.71428571,  1.        ]), array([-1.        , -0.71428571, -0.42857143, -0.14285714,  0.14285714,
-        0.42857143,  0.71428571,  1.        ])]], 'subdomain_wss': [[array([1.73333333, 1.73333333, 1.73333333, 1.73333333]), array([1.73333333, 1.73333333, 1.73333333, 1.73333333])], [array([0.74285714, 0.74285714, 0.74285714, 0.74285714, 0.74285714,
-       0.74285714, 0.74285714, 0.74285714]), array([0.74285714, 0.74285714, 0.74285714, 0.74285714, 0.74285714,
-       0.74285714, 0.74285714, 0.74285714])]], 'unnorm': (0.0, 3.0)}
+decomposition_init_kwargs: {'subdomain_xss': [[array([-1.        , -0.33333333,  0.33333333,  1.        ]), array([-1.        , -0.33333333,  0.33333333,  1.        ])]], 'subdomain_wss': [[array([1.73333333, 1.73333333, 1.73333333, 1.73333333]), array([1.73333333, 1.73333333, 1.73333333, 1.73333333])]], 'unnorm': (0.0, 3.0)}
 network: <class 'fbpinns.networks.FCN'>
 network_init_kwargs: {'layer_sizes': (2, 16, 16, 1)}
-n_steps: 50000
+n_steps: 100000
 scheduler: <class 'fbpinns.schedulers.AllActiveSchedulerND'>
 scheduler_kwargs: {}
 ns: ((10, 1),)
 n_test: (2, 2)
 sampler: grid
-optimiser: <function adam at 0x7f649b695b20>
+optimiser: <function adam at 0x7f3b886aec00>
 optimiser_kwargs: {'learning_rate': 0.0001}
 seed: 0
 summary_freq: 1000

@@ -576,37 +576,6 @@ class GravityHeart(Problem):
             ]
         }
 
-        # def ansatz_fn(x):
-        #     return ansatz  # Simply returns the static ansatz array
-
-        # def ansatz_x_fn(x):
-        #     return ansatz_x  # Returns the precomputed first derivative
-
-        # def ansatz_xx_fn(x):
-        #     return ansatz_xx  # Returns the precomputed second derivative
-        
-        # def ansatz_vjp(primals, tangents):
-        #     x = primals[0]  # The input argument (x_batch)
-        #     tangent = tangents[0]  # The gradient (tangent) coming from the next layer
-        #     return (ansatz_x * tangent,)
-
-        # def ansatz_x_vjp(primals, tangents):
-        #     x = primals[0]  # The input argument (x_batch)
-        #     tangent = tangents[0]  # The gradient (tangent) coming from the next layer
-        #     return (ansatz_xx * tangent,)  # This returns the product of ansatz and tangent
-
-        # @custom_vjp
-        # def BC(x, y):
-        #     return ansatz * u
-
-        # @BC.defjvp
-        # def BC_jvp(primals, tangents):
-        #     x, y = primals
-        #     x_dot, y_dot = tangents
-        #     primal_out = BC(x, y)
-        #     tangent_out = jnp.cos(x) * x_dot * y + jnp.sin(x) * y_dot
-        #     return primal_out, tangent_out
-
         return static_params, {}
 
     @staticmethod
@@ -626,9 +595,7 @@ class GravityHeart(Problem):
         ansatz_y = all_params["static"]["problem"]["ansatz_y"]
         ansatz_xx = all_params["static"]["problem"]["ansatz_xx"]
         ansatz_yy = all_params["static"]["problem"]["ansatz_yy"]        
-    
-        x, y = x_batch[:,0:1], x_batch[:,1:2]
-
+        
         @jax.custom_jvp
         def ansatz_x_fn(x, y):
             return ansatz_x
@@ -669,8 +636,11 @@ class GravityHeart(Problem):
             primal_out = ansatz
             tangent_out = ansatz_x_value * x_dot + ansatz_y_value * y_dot
             return primal_out, tangent_out
+
+        x, y = x_batch[:,0:1], x_batch[:,1:2]
         
         bc = ansatz_fn(x, y)
+        # bc = ansatz
 
         return jnp.multiply(bc, u)
 
@@ -678,16 +648,8 @@ class GravityHeart(Problem):
     def loss_fn(all_params, constraints):
         sources = all_params["static"]["problem"]["sources"]
         
-        ansatz = all_params["static"]["problem"]["ansatz"]
-        # ansatz_x = all_params["static"]["problem"]["ansatz_x"]
-        # ansatz_y = all_params["static"]["problem"]["ansatz_y"]
-        
         x_batch, u_xx, u_yy = constraints[0]
-        
-        # ansatz = jnp.where(ansatz == 0, 1e-10, ansatz)
-        # u_xx = u_xx + 2 * (ansatz_x / ansatz) * u_x
-        # u_yy = u_yy + 2 * (ansatz_y / ansatz) * u_y
-        
+                
         norm = jnp.linalg.norm
         
         f = jnp.zeros(x_batch.shape[0])
