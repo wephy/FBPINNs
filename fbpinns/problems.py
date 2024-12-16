@@ -336,6 +336,139 @@ class BurgersEquation2D(Problem):
         return u
 
 
+class Heart(Problem):
+    """
+    """
+
+    @staticmethod
+    def init_params(boundary, E=1):
+
+        static_params = {
+            "dims":(1,2),
+            "E":E,
+            "boundary":boundary,
+        }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,()),   #u1
+            (0,(0,0)),#u1_xx
+            (0,(1,1)),#u1_yy
+            # (0,(0,)),  #u1_x
+            # (0,(1,)),  #u1_y
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        boundary = all_params["static"]["problem"]["boundary"]
+                
+        u = u * boundary
+        # u = u / jnp.mean(u**2)
+        
+        return u
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        E = all_params["static"]["problem"]["E"]
+        x_batch, u1, u1_xx, u1_yy = constraints[0]
+        x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
+        # c = (50 / 100)
+        # a = (45 / 100)
+        # b = (42 / 100)
+        # boundary = (((x - c)/(b))**2 * ((y - c)/(b))**3 - (((x - c)/b)**2 + ((y - a)/(b))**2 - 1)**3)
+        # cond_outside = (boundary < 0)
+        
+        # smooth_loss_x = u1_x * ~cond_outside
+        # smooth_loss_y = u1_y * ~cond_outside
+        
+        phys1 = u1_xx + u1_yy + (E * u1)
+
+        return jnp.mean(phys1**2)# + jnp.mean(smooth_loss_x**2) + jnp.mean(smooth_loss_y**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        # s = x_batch[:, 0]
+        return x_batch
+
+
+class Schrodinger2D(Problem):
+    """
+    """
+
+    @staticmethod
+    def init_params(sd=0.1, E=1):
+
+        static_params = {
+            "dims":(1,2),
+            "sd":sd,
+            "E":E,
+            # "hbar/2me":5.788382e-5
+        }
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,()),   #u1
+            (0,(0,0)),#u1_xx
+            (0,(1,1)),#u1_yy
+            # (1,()),   #u2
+            # (1,(0,0)),#u2_xx
+            # (1,(1,1)),#u2_yy
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        sd = all_params["static"]["problem"]["sd"]
+        
+        x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
+        
+        u1 = u
+        # u1 = u[:, 0:1]
+        # u2 = u[:, 1:2]
+        
+        boundary = tanh((x)/sd)*tanh((1-x)/sd)*tanh((y)/sd)*tanh((1-y)/sd)
+        
+        u1 = boundary * u1
+        # u2 = boundary * u2
+        
+        u1 = u1 / jnp.sqrt(jnp.mean(u1**2))
+        # u2 = u2 / jnp.sqrt(jnp.mean(u2**2))
+        
+        return u1
+        # return jnp.concatenate((u1, u2), axis=1)
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        E = all_params["static"]["problem"]["E"]
+        # x_batch, u1, u1_xx, u1_yy, u2, u2_xx, u2_yy = constraints[0]
+        x_batch, u1, u1_xx, u1_yy = constraints[0]
+        
+        phys1 = u1_xx + u1_yy + E * u1
+        # phys2 = u2_xx + u2_yy + E * u2
+
+        # orthogonality = jnp.abs(np.sum(u1 * u2))
+        
+        # penalty = jnp.abs(np.sum(u1 * u2)**2) / 100
+
+        return jnp.mean(phys1**2)# + jnp.mean(phys2**2) + orthogonality# + penalty
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        # s = x_batch[:, 0]
+        return x_batch
+
+
 class Laplace2D(Problem):
     """
         d^2 u   d^2 u   
@@ -407,6 +540,171 @@ class Laplace2D(Problem):
         return (1 / n * s).reshape((-1,1))
 
 
+from jax import custom_vjp
+
+
+class GravityHeart(Problem):
+    """
+        d^2 u   d^2 u   
+        ----- + ----- = rho(x)
+        dx^2    dy^2    
+
+        Boundary conditions:
+        u(x,0) = 0
+        u(x,1) = 0
+        u(0,y) = 0
+        u(1,y) = 0
+    """
+
+    @staticmethod
+    def init_params(ansatz, ansatz_x, ansatz_y, ansatz_xx, ansatz_yy):
+
+        static_params = {
+            "dims":(1,2),
+            "ansatz":ansatz,
+            "ansatz_x":ansatz_x,
+            "ansatz_y":ansatz_y,
+            "ansatz_xx":ansatz_xx,
+            "ansatz_yy":ansatz_yy,
+            # "ansatz_xx":ansatz,
+            "sources": [
+                # [np.array([0.0, 0.0]), 0.1, 8],
+                [np.array([0.3, 0.7]), 0.1, 8],
+                [np.array([-0.7, 0.3]), 0.1, 2],
+                [np.array([-0.3, -0.7]), 0.1, 1],
+                [np.array([0.7, -0.3]), 0.1, 4]
+            ]
+        }
+
+        # def ansatz_fn(x):
+        #     return ansatz  # Simply returns the static ansatz array
+
+        # def ansatz_x_fn(x):
+        #     return ansatz_x  # Returns the precomputed first derivative
+
+        # def ansatz_xx_fn(x):
+        #     return ansatz_xx  # Returns the precomputed second derivative
+        
+        # def ansatz_vjp(primals, tangents):
+        #     x = primals[0]  # The input argument (x_batch)
+        #     tangent = tangents[0]  # The gradient (tangent) coming from the next layer
+        #     return (ansatz_x * tangent,)
+
+        # def ansatz_x_vjp(primals, tangents):
+        #     x = primals[0]  # The input argument (x_batch)
+        #     tangent = tangents[0]  # The gradient (tangent) coming from the next layer
+        #     return (ansatz_xx * tangent,)  # This returns the product of ansatz and tangent
+
+        # @custom_vjp
+        # def BC(x, y):
+        #     return ansatz * u
+
+        # @BC.defjvp
+        # def BC_jvp(primals, tangents):
+        #     x, y = primals
+        #     x_dot, y_dot = tangents
+        #     primal_out = BC(x, y)
+        #     tangent_out = jnp.cos(x) * x_dot * y + jnp.sin(x) * y_dot
+        #     return primal_out, tangent_out
+
+        return static_params, {}
+
+    @staticmethod
+    def sample_constraints(all_params, domain, key, sampler, batch_shapes):
+        # physics loss
+        x_batch_phys = domain.sample_interior(all_params, key, sampler, batch_shapes[0])
+        required_ujs_phys = (
+            (0,(0,0)),
+            (0,(1,1)),
+        )
+        return [[x_batch_phys, required_ujs_phys],]
+
+    @staticmethod
+    def constraining_fn(all_params, x_batch, u):
+        ansatz = all_params["static"]["problem"]["ansatz"]
+        ansatz_x = all_params["static"]["problem"]["ansatz_x"]
+        ansatz_y = all_params["static"]["problem"]["ansatz_y"]
+        ansatz_xx = all_params["static"]["problem"]["ansatz_xx"]
+        ansatz_yy = all_params["static"]["problem"]["ansatz_yy"]        
+    
+        x, y = x_batch[:,0:1], x_batch[:,1:2]
+
+        @jax.custom_jvp
+        def ansatz_x_fn(x, y):
+            return ansatz_x
+
+        @ansatz_x_fn.defjvp
+        def ansatz_x_fn_jvp(primals, tangents):
+            xs, ys = primals
+            x_dot, y_dot = tangents
+            primal_out = ansatz_x
+            tangent_out = ansatz_xx * x_dot
+            return primal_out, tangent_out
+        
+        @jax.custom_jvp
+        def ansatz_y_fn(x, y):
+            return ansatz_y
+
+        @ansatz_y_fn.defjvp
+        def ansatz_y_fn_jvp(primals, tangents):
+            xs, ys = primals
+            x_dot, y_dot = tangents
+            primal_out = ansatz_y
+            tangent_out = ansatz_yy * y_dot
+            return primal_out, tangent_out        
+        
+        @jax.custom_jvp
+        def ansatz_fn(x, y):
+            return ansatz
+
+        @ansatz_fn.defjvp
+        def ansatz_fn_jvp(primals, tangents):
+            xs, ys = primals
+            x_dot, y_dot = tangents
+            
+            # Call the derivative functions to compute the tangent
+            ansatz_x_value = ansatz_x_fn(xs, ys)  # Call ansatz_x_fn
+            ansatz_y_value = ansatz_y_fn(xs, ys)  # Call ansatz_y_fn
+            
+            primal_out = ansatz
+            tangent_out = ansatz_x_value * x_dot + ansatz_y_value * y_dot
+            return primal_out, tangent_out
+        
+        bc = ansatz_fn(x, y)
+
+        return jnp.multiply(bc, u)
+
+    @staticmethod
+    def loss_fn(all_params, constraints):
+        sources = all_params["static"]["problem"]["sources"]
+        
+        ansatz = all_params["static"]["problem"]["ansatz"]
+        # ansatz_x = all_params["static"]["problem"]["ansatz_x"]
+        # ansatz_y = all_params["static"]["problem"]["ansatz_y"]
+        
+        x_batch, u_xx, u_yy = constraints[0]
+        
+        # ansatz = jnp.where(ansatz == 0, 1e-10, ansatz)
+        # u_xx = u_xx + 2 * (ansatz_x / ansatz) * u_x
+        # u_yy = u_yy + 2 * (ansatz_y / ansatz) * u_y
+        
+        norm = jnp.linalg.norm
+        
+        f = jnp.zeros(x_batch.shape[0])
+        
+        for source in sources:
+            f += (norm(x_batch - source[0], axis=1) < source[1]) * source[2]
+
+        phys = f.reshape((-1, 1)) + u_xx + u_yy
+
+        return jnp.mean(phys**2)
+
+    @staticmethod
+    def exact_solution(all_params, x_batch, batch_shape):
+        s = x_batch[:, 0]
+        return s
+
+
 class Gravity(Problem):
     """
         d^2 u   d^2 u   
@@ -426,11 +724,17 @@ class Gravity(Problem):
         static_params = {
             "dims":(1,2),
             "sd":sd,
+            # "sources": [
+            #     [np.array([0.3, 0.7]), 0.1, 8],
+            #     [np.array([-0.7, 0.3]), 0.1, 2],
+            #     [np.array([-0.3, -0.7]), 0.1, 1],
+            #     [np.array([0.7, -0.3]), 0.1, 4]
+            # ]
             "sources": [
-                [np.array([0.3, 0.7]), 0.02, 5],
-                [np.array([0.7, 0.7]), 0.02, 1],
-                [np.array([0.3, 0.3]), 0.02, 1],
-                [np.array([0.7, 0.3]), 0.02, 1]
+                [np.array([0.3, 0.7]), 0.1, 1000],
+                # [np.array([-0.7, 0.3]), 0.1, 2],
+                [np.array([-0.3, -0.7]), 0.1, 1],
+                # [np.array([0.7, -0.3]), 0.1, 4]
             ]
         }
 
@@ -450,8 +754,14 @@ class Gravity(Problem):
     def constraining_fn(all_params, x_batch, u):
         sd = all_params["static"]["problem"]["sd"]
         
-        x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
-        u = tanh((x)/sd)*tanh((1-x)/sd)*tanh((y)/sd)*tanh((1-y)/sd)*u
+        # SQUARE
+        # x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
+        # u = tanh((x+1)/sd)*tanh((1-x)/sd)*tanh((y+1)/sd)*tanh((1-y)/sd)*u
+        
+        # DONUT
+        x, y, tanh, sqrt = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh, jnp.sqrt
+        r = sqrt(x**2 + y**2)
+        u = tanh((r - 0.5)/sd)*tanh((1-r)/sd) * u
         
         return u
 
@@ -459,7 +769,6 @@ class Gravity(Problem):
     def loss_fn(all_params, constraints):
         sources = all_params["static"]["problem"]["sources"]
         x_batch, u_xx, u_yy = constraints[0]
-        x, y, = x_batch[:,0], x_batch[:,1]
 
         norm = jnp.linalg.norm
         
@@ -497,10 +806,10 @@ class GravityDonut(Problem):
             "dims":(1,2),
             "sd":sd,
             "sources": [
-                [np.array([0.3, 0.7]), 0.1, 5],
-                [np.array([-0.7, 0.3]), 0.1, 1],
+                [np.array([0.3, 0.7]), 0.1, 10],
+                [np.array([-0.7, 0.3]), 0.1, 3],
                 [np.array([-0.3, -0.7]), 0.1, 1],
-                [np.array([0.7, -0.3]), 0.1, 1]
+                [np.array([0.7, -0.3]), 0.1, 3]
             ]
         }
 
@@ -613,7 +922,6 @@ class Laplace2D_2(Problem):
         s = sinh(x) * cos(y)
 
         return s.reshape((-1,1))
-
 
 class Ice(Problem):
     """
@@ -735,7 +1043,7 @@ class CahnHilliard(Problem):
     """
 
     @staticmethod
-    def init_params(sdt=0.1, gamma=0.005**2):
+    def init_params(sdt=0.1, gamma=0.5):
         static_params = {
             "dims":(1,3),
             "sdt":sdt,
@@ -770,9 +1078,13 @@ class CahnHilliard(Problem):
         sdt = all_params["static"]["problem"]["sdt"]
         x, y, t, tanh, sin, cos = x_batch[:,0:1], x_batch[:,1:2], x_batch[:,2:3], jax.nn.tanh, jnp.sin, jnp.cos
         
-        tanh_t0 = tanh(t/sdt)
+        noise = 0.25 * jax.random.normal(jax.random.PRNGKey(42), shape=u.shape)
         
-        return tanh_t0 * u + (1 - tanh_t0) * sin(x / 10) * sin(y / 10)**3
+        tanh_t0 = tanh(t / sdt)
+        
+        print("shapes", u.shape, noise.shape)
+        
+        return tanh_t0 * u + (1 - tanh_t0) * noise
 
     @staticmethod
     def loss_fn(all_params, constraints):
@@ -782,38 +1094,38 @@ class CahnHilliard(Problem):
         
         x, y, t = x_batch[:,0:1], x_batch[:,1:2], x_batch[:,2:3]
         
-        cond_x0 = x == 0
-        cond_x1 = x == 100
-        cond_y0 = y == 0
-        cond_y1 = y == 100
+        # cond_x0 = x == 0
+        # cond_x1 = x == 100
+        # cond_y0 = y == 0
+        # cond_y1 = y == 100
         
         u2 = u * u
         
-        cahnhilliard_loss = u_t + gamma * (u_xxxx + 2 * u_xxyy + u_yyyy) - 6 * u * (u_x**2 + u_y**2) - 3 * u2 * (u_xx + u_yy)
+        cahnhilliard_loss = u_t + gamma * (u_xxxx + 2 * u_xxyy + u_yyyy) - 6 * (u_x**2 + u_y**2) - 3 * u2 * (u_xx + u_yy)
 
-        mu_x = gamma * (u_xxx + u_xyy) + u_x * (1 - 3 * u2)
-        mu_y = gamma * (u_xxy + u_yyy) + u_x * (1 - 3 * u2)
+        # mu_x = gamma * (u_xxx + u_xyy) + u_x * (1 - 3 * u2)
+        # mu_y = gamma * (u_xxy + u_yyy) + u_x * (1 - 3 * u2)
         
-        u_x0 = u_x * (~cond_x0)
-        u_x1 = u_x * (~cond_x1)
-        u_y0 = u_y * (~cond_y0)
-        u_y1 = u_y * (~cond_y1)
+        # u_x0 = u_x * (~cond_x0)
+        # u_x1 = u_x * (~cond_x1)
+        # u_y0 = u_y * (~cond_y0)
+        # u_y1 = u_y * (~cond_y1)
         
-        mu_x0 = mu_x * (~cond_x0)
-        mu_x1 = mu_x * (~cond_x1)
-        mu_y0 = mu_y * (~cond_y0)
-        mu_y1 = mu_y * (~cond_y1)
+        # mu_x0 = mu_x * (~cond_x0)
+        # mu_x1 = mu_x * (~cond_x1)
+        # mu_y0 = mu_y * (~cond_y0)
+        # mu_y1 = mu_y * (~cond_y1)
         
         return (
-            100 * jnp.mean(cahnhilliard_loss**2) +
-            jnp.mean(mu_x0**2) +
-            jnp.mean(mu_x1**2) +
-            jnp.mean(mu_y0**2) +
-            jnp.mean(mu_y1**2) +
-            jnp.mean(u_x0**2) +
-            jnp.mean(u_x1**2) +
-            jnp.mean(u_y0**2) +
-            jnp.mean(u_y1**2)
+            jnp.mean(cahnhilliard_loss**2) #+
+            # jnp.mean(mu_x0**2) +
+            # jnp.mean(mu_x1**2) +
+            # jnp.mean(mu_y0**2) +
+            # jnp.mean(mu_y1**2) +
+            # jnp.mean(u_x0**2) +
+            # jnp.mean(u_x1**2) +
+            # jnp.mean(u_y0**2) +
+            # jnp.mean(u_y1**2)
         )
 
     @staticmethod
@@ -823,28 +1135,19 @@ class CahnHilliard(Problem):
         return x.reshape((-1,1))
 
 
-
 class WaveEquationConstantVelocity3D(Problem):
     """Solves the time-dependent (2+1)D wave equation with constant velocity
         d^2 u   d^2 u    1  d^2 u
-        ----- + ----- - --- ----- = 0
+        ----- + ----- - --- ----- = f
         dx^2    dy^2    c^2 dt^2
-
-        Boundary conditions:
-        u(x,y,0) = amp * exp( -0.5 (||[x,y]-mu||/sd)^2 )
-        du
-        --(x,y,0) = 0
-        dt
     """
 
     @staticmethod
-    def init_params(c0=1, source=np.array([[0., 0., 0.2, 1.]])):
+    def init_params(sd=1, source=np.array([[0., 0., 0.2, 1.]])):
 
         static_params = {
             "dims":(1,3),
-            "c0":c0,
-            "c_fn":WaveEquationConstantVelocity3D.c_fn,# velocity function
-            "source":jnp.array(source),# location, width and amplitude of initial gaussian sources (k, 4)
+            "sd":0.05,
             }
         return static_params, {}
 
@@ -862,19 +1165,25 @@ class WaveEquationConstantVelocity3D(Problem):
 
     @staticmethod
     def constraining_fn(all_params, x_batch, u):
-        params = all_params["static"]["problem"]
-        c0, source = params["c0"], params["source"]
-        x, t = x_batch[:,0:2], x_batch[:,2:3]
-        tanh, exp = jax.nn.tanh, jnp.exp
+        sd = all_params["static"]["problem"]["sd"]
+        
+        x, y, tanh = x_batch[:,0:1], x_batch[:,1:2], jax.nn.tanh
+        u = tanh((x+1)/sd)*tanh((1-x)/sd)*tanh((y+1)/sd)*tanh((1-y)/sd)*u
+        
+        return u
+        
+        # c0, source = params["c0"], params["source"]
+        # x, t = x_batch[:,0:2], x_batch[:,2:3]
+        # tanh, exp = jax.nn.tanh, jnp.exp
 
-        # get starting wavefield
-        p = jnp.expand_dims(source, axis=1)# (k, 1, 4)
-        x = jnp.expand_dims(x, axis=0)# (1, n, 2)
-        f = (p[:,:,3:4]*exp(-0.5 * ((x-p[:,:,0:2])**2).sum(2, keepdims=True)/(p[:,:,2:3]**2))).sum(0)# (n, 1)
+        # # get starting wavefield
+        # p = jnp.expand_dims(source, axis=1)# (k, 1, 4)
+        # x = jnp.expand_dims(x, axis=0)# (1, n, 2)
+        # f = (p[:,:,3:4]*exp(-0.5 * ((x-p[:,:,0:2])**2).sum(2, keepdims=True)/(p[:,:,2:3]**2))).sum(0)# (n, 1)
 
-        # form time-decaying anzatz
-        t1 = source[:,2].min()/c0
-        f = exp(-0.5*(1.5*t/t1)**2) * f
+        # # form time-decaying anzatz
+        # t1 = source[:,2].min()/c0
+        # f = exp(-0.5*(1.5*t/t1)**2) * f
         t = tanh(2.5*t/t1)**2
         return f + t*u
 

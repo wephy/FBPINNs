@@ -13,6 +13,7 @@ from matplotlib.gridspec import GridSpec
 
 from fbpinns.plot_trainer_1D import _plot_setup, _to_numpy
 
+import scienceplots
 import matplotlib.tri as mtri
 import triangle as tr
 import time
@@ -54,59 +55,94 @@ def _plot_test_im(u_test, xlim, ulim, n_test, it=None, bounds=True):
 @_to_numpy
 def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test):
 
-    # SQUARE
-    # A = dict(vertices=np.array(((-1, -1), (1, -1), (1, 1), (-1, 1))))
-    # T = tr.triangulate(A, f"DFqa{0.0005}")  # D flag ensures that all triangles are Delaunay
-    # tri = mtri.Triangulation(T["vertices"][:,0], T["vertices"][:, 1], triangles=T["triangles"])
+    # plt.style.use(["science"])
 
+    # SQUARE
+    npzfile = dict(np.load("data/" + "heart" + "_mtri.npz", allow_pickle=True))["arr_0"]
+    mtri = npzfile.item()
+
+    fig, ax = plt.subplots(figsize=(0.6 * 8, 0.4 * 8))
+    ax.set_yticks([-1, 0, 1])
+    ax.set_xticks([-1, 0, 1])
+    ax.set_aspect("equal")
+
+    u_test = u_test.reshape(-1)
+    np.save("heart" + f"_testNN[4, 8;2.6]e{i}_2", u_test)
+
+    im = ax.tripcolor(mtri, u_test,
+                      cmap=Colormap("crameri:batlow").to_mpl(), clim=(np.min(u_test), np.max(u_test)))
+
+
+    cbar = fig.colorbar(im, orientation='vertical')
+    plt.show()
+    fig.savefig("heart" + f"_testNN[4, 8, 16;2.6]e{i}_2.png")
     # time.sleep(5)
 
-    xlim, ulim = _plot_setup(x_batch_test, u_exact)
-    xlim0 = x_batch_test.min(0), x_batch_test.max(0)
+    # xlim, ulim = _plot_setup(x_batch_test, u_exact)
+    # xlim0 = x_batch_test.min(0), x_batch_test.max(0)
 
-    f = plt.figure(figsize=(14,6))
+    # np.save(f"donut_epoch{i}_0", u_test)
 
-    # if i == 10_000:
-    plt.subplot(1,2,1)
-    plt.title(f"[{i}] Domain decomposition")
-    plt.scatter(x_batch[:,0], x_batch[:,1], alpha=0.5, color="k", s=1)
-    decomposition.plot(all_params, active=active, create_fig=False)
-    plt.xlim(xlim[0][0], xlim[1][0])
-    plt.ylim(xlim[0][1], xlim[1][1])
-    plt.gca().set_aspect("equal")
+    # f = plt.figure(figsize=(14,6))
+
+    # plt.subplot(1,2,1)
+    # plt.title(f"[{i}] Domain decomposition")
+    # plt.scatter(x_batch[:,0], x_batch[:,1], alpha=0.5, color="k", s=1)
+    # decomposition.plot(all_params, active=active, create_fig=False)
+    # plt.xlim(xlim[0][0], xlim[1][0])
+    # plt.ylim(xlim[0][1], xlim[1][1])
+    # plt.gca().set_aspect("equal")
     
-    print(n_test, u_test.shape, u_test)
     
-    plt.subplot(1,2,2)
-    plt.title(f"[{i}] Full solution")
-    p = plt.tripcolor(n_test, u_test.reshape((-1)), cmap="viridis")
-    plt.colorbar(p)
-    plt.gca().set_aspect("equal")
+    # u1 = u_test[:, 0:1]
+    # u2 = u_test[:, 1:2]
+    
+    # xlim, ulim = _plot_setup(x_batch_test, u_exact)
+    # xlim0 = x_batch_test.min(0), x_batch_test.max(0)
 
-    # # plot full solutions
+    # f = plt.figure(figsize=(8,10))
+
+    # # plot domain + x_batch
+    # plt.subplot(2,2,1)
+    # plt.title(f"[{i}] Domain decomposition")
+    # plt.scatter(x_batch[:,0], x_batch[:,1], alpha=0.5, color="k", s=1)
+    # decomposition.plot(all_params, active=active, create_fig=False)
+    # plt.xlim(xlim[0][0], xlim[1][0])
+    # plt.ylim(xlim[0][1], xlim[1][1])
+    # plt.gca().set_aspect("equal")
+
+    # plot full solutions
     # plt.subplot(3,2,2)
     # plt.title(f"[{i}] Difference")
     # _plot_test_im(u_exact - u_test, xlim0, ulim, n_test)
 
+    # M = np.max(np.abs(u_test))
 
-    
-    
-    # _plot_test_im(u_test, xlim0, ulim, n_test)
+    # plt.subplot(2,2,3)
+    # plt.title(f"[{i}] Full solution")
+    # plt.pcolormesh(u_test.reshape(n_test).T, vmin=-M, vmax=M)
+    # plt.colorbar()
+    # plt.gca().set_aspect("equal")
+
+    # plt.subplot(2,2,4)
+    # plt.title(f"[{i}] Full solution")
+    # _plot_test_im(u2, xlim0, ulim, n_test)
+    # plt.gca().set_aspect("equal")
 
     # plt.subplot(3,2,4)
     # plt.title(f"[{i}] Ground truth")
-    # _plot_test_im(u_test, xlim0, ulim, n_test)
+    # _plot_test_im(u_exact, xlim0, ulim, n_test)
 
-    # # plot raw hist
+    # plot raw hist
     # plt.subplot(3,2,5)
     # plt.title(f"[{i}] Raw solutions")
     # plt.hist(us_raw_test.flatten(), bins=100, label=f"{us_raw_test.min():.1f}, {us_raw_test.max():.1f}")
     # plt.legend(loc=1)
     # plt.xlim(-5,5)
+    
+    # plt.tight_layout()
 
-    plt.tight_layout()
-
-    return (("test",f),)
+    return (("test",fig),)
 
 # @_to_numpy
 # def plot_2D_FBPINN(x_batch_test, u_exact, u_test, us_test, ws_test, us_raw_test, x_batch, all_params, i, active, decomposition, n_test):

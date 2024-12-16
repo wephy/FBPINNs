@@ -75,8 +75,11 @@ class RectangularDomainND(Domain):
 
     @staticmethod
     def sample_interior(all_params, key, sampler, batch_shape):
-        xmin, xmax = all_params["static"]["domain"]["xmin"], all_params["static"]["domain"]["xmax"]
-        return RectangularDomainND._rectangle_samplerND(key, sampler, xmin, xmax, batch_shape)
+        data = jnp.load("data/" + "heart" + "_points.npy")
+        # x_batch_test = data.copy()
+        return data
+        # xmin, xmax = all_params["static"]["domain"]["xmin"], all_params["static"]["domain"]["xmax"]
+        # return RectangularDomainND._rectangle_samplerND(key, sampler, xmin, xmax, batch_shape)
 
     @staticmethod
     def sample_boundaries(all_params, key, sampler, batch_shapes):
